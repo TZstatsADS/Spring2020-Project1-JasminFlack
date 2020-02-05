@@ -1,0 +1,183 @@
+---
+title: "Love Songs -- Are They Happy or Sad?"
+author: "Jasmin Flack"
+date: "2/4/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+#Packages
+#install.packages("SnowballC")
+library("rvest")
+library("tibble")
+library("gplots")
+library("dplyr")
+library("tm")
+library("scales")
+library("RColorBrewer")
+library("tm")
+library("stringr")
+library("SnowballC")
+library("wordcloud")
+library("plyr")
+```
+### Love Songs -- Are They Happy or Sad?
+```{r echo=FALSE}
+#loading data
+load('../output/processed_lyrics.RData') 
+```
+Music makes up a big part of our lives. Approximately 51% of adults report listening to music every day[(Source)](https://www.statista.com/topics/1639/music/). With that much music being consumed, the messages being conveyed in songs are undoubtedly impactful on our day to day lives. Looking at a selection of over 125,000 songs across 11 genres, here are some of the most frequently used words and ideas:
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# Create corpus of all words
+corpus <- VCorpus(VectorSource(dt_lyrics$stemmedwords))
+dtm <- tm_map(corpus, PlainTextDocument)
+
+#Wordcloud
+col=brewer.pal(6,"Dark2")
+wordcloud(dtm,rot.per = 0.25,
+          random.color=T, max.word=45, random.order=F,colors=col)
+
+#Count of word Love
+sorted_all_words <- sort(table(unlist(str_extract_all(dt_lyrics$stemmedwords, "[a-z]+"))), decreasing=T)
+
+```
+
+
+As we can see here, love is a big idea. It's used over 194,000 times across over 40% of the songs in this sample. So what about these love songs? Generally, when I hear the phrase "love song", I think of something sad. But is that the case? Are love songs generally sad?
+
+First let's explore the most used words in these love songs: 
+
+```{r echo=FALSE}
+#subset of songs including the word "Love"
+contains_love <- which(str_detect(dt_lyrics$stemmedwords, "love"))
+love_songs <- dt_lyrics[contains_love,]
+#nrow(love_songs)/nrow(dt_lyrics)
+write.csv(love_songs, file="love_songs_subset.csv")
+```
+
+```{r echo=FALSE}
+#Creating and cleaning corpus for love songs wordcloud
+corpus2 <- VCorpus(VectorSource(love_songs$stemmedwords))
+dtm2 <- tm_map(corpus2, removeWords, "love")
+dtm2 <- tm_map(dtm2, PlainTextDocument)
+
+col=brewer.pal(6,"Dark2")
+
+#Dataframe for histogram
+sorted_words <- sort(table(unlist(str_extract_all(love_songs$stemmedwords, "[a-z]+"))), decreasing=T)
+words_mat <- as.matrix(sorted_words)
+df <- data.frame(word=row.names(words_mat), freq=words_mat[,1])
+
+#plots
+par(mfrow=c(1,2))
+wordcloud(dtm2, rot.per = 0.25,
+          random.color=T, max.word=45, random.order=F,colors=col)
+barplot(df[2:20,]$freq, las = 2, names.arg = df[2:20,]$word,
+        col ="lightblue", main ="Most frequent words",
+        ylab = "Word frequencies")
+```
+
+Some of the top words here are:
+*baby
+*time
+*you're
+*i'll
+*heart
+
+None of these are particularly positive or negative, so let's take another approach. Below I've cross-referenced the words in all of these love songs with a list of words that have been determined either positive or negative.[(Source)](https://www.cs.uic.edu/~liub/FBS/sentiment-analysis.html#lexicon).
+
+
+```{r echo=FALSE}
+#List of Positivee and Negative words from https://www.cs.uic.edu/~liub/FBS/sentiment-analysis.html#lexicon
+positives= readLines("/Users/jasminflack/Desktop/Applied Data Science/Project 1/Spring2020-Project1-JasminFlack/data/positive-words.txt")
+negatives = readLines("/Users/jasminflack/Desktop/Applied Data Science/Project 1/Spring2020-Project1-JasminFlack/data/negative-words.txt")
+
+#Matching words against those lists
+all_words <- unlist(str_extract_all(love_songs$stemmedwords, "[a-z]+"))
+positive_matches <- match(all_words, positives)
+negative_matches <- match(all_words, negatives)
+positive_matches = sum(!is.na(positive_matches))
+negative_matches = sum(!is.na(negative_matches))
+#positive_matches/length(all_words)
+#negative_matches/length(all_words)
+
+#Dataframe and plot showing how many words of each there were
+match_df <- data.frame(match=c("Postive", "Negative"), words=c(positive_matches,negative_matches))
+barplot(match_df$words, las = 2, names.arg = match_df$match,
+        col ="lightblue", main ="Postive vs. Negative Words",
+        ylab = "Word frequencies" )
+
+```
+
+
+It seems that there are slightly more negative words than postive ones, but not by much. Positive words make up about 10.7% of all significan words, while negative words make up 11.7%.
+
+Instead, let's look at each song. Each song will be given a score corresponding to how positive or negative it is. Songs with more positive words will be positive and songs with more negative words will be negative.
+Consistent with before, there seem to be more negative love songs than positive ones and the negaive songs seem to be more negative. Here are some stats on the scores:
+
+```{r echo=FALSE}
+#matching postive/negative words with stemmed words
+words <- str_extract_all(love_songs$stemmedwords, "[a-z]+")
+positive_matches <- lapply(words, match, positives)
+negative_matches <- lapply(words, match, negatives)
+
+matches <- function(words){
+  m <- sum(!is.na(words))
+  return(m)
+}
+positive_sum <- lapply(positive_matches, matches)
+negative_sum <-  lapply(negative_matches, matches)
+score <- unlist(positive_sum) - unlist(negative_sum)
+
+love_songs$score <- score
+summary(love_songs$score)
+#proportion of negative/positive songs
+pos_song <- sum(love_songs$score>0)
+neut_song <- sum(love_songs$score==0)
+neg_song <- sum(love_songs$score<0)
+
+song_df <- data.frame(sentiment=c("Positive", "Negative", "Neutral"), freq= c(pos_song,neg_song,neut_song))
+
+barplot(song_df$freq, las = 2, names.arg = song_df$sentiment,
+        col ="lightblue", main ="Postive vs. Negative Songs",
+        ylab = "# of Songs" )
+
+# Decided not to Include Boxplot Here
+#df_box <- data.frame(sums=c(unlist(positive_sum),unlist(negative_sum)), names=c("Postive", "Negative"))
+#boxplot(df_box$sums~df_box$names, ylim=500)
+#boxplot(unlist(negative_sum))
+```
+
+
+
+Below are some of the most used words in positive songs and negative songs:
+
+```{r echo=FALSE}
+#postive
+positive_songs <- love_songs[which(love_songs$score>0),]
+corpus3 <- VCorpus(VectorSource(positive_songs$stemmedwords))
+dtm3 <- tm_map(corpus3, removeWords, "love")
+dtm3 <- tm_map(dtm3, PlainTextDocument)
+
+negative_songs <- love_songs[which(love_songs$score<0),]
+corpus4 <- VCorpus(VectorSource(negative_songs$stemmedwords))
+dtm4 <- tm_map(corpus4, removeWords, "love")
+dtm4 <- tm_map(dtm4, PlainTextDocument)
+
+par(mfrow=c(1,2))
+wordcloud(dtm3,rot.per = 0.25,
+          random.color=T, max.word=45, random.order=F,colors=brewer.pal(3,"BuGn"))
+wordcloud(dtm4,rot.per = 0.25,
+          random.color=T, max.word=45, random.order=F,colors=brewer.pal(3,"Reds"))
+```
+
+Notice that there are a lot of words that appear in both of these maps.
+
+Though I've used the term "love song" loosely (referring to songs with the word love in it), it seems that while there's slightly more negative sentiment in love songs, it's nothing significant. 
+

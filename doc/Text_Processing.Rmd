@@ -1,7 +1,9 @@
 ---
 title: "Stem Completion"
 author: "Chengliang Tang, Arpita Shah, Yujie Wang and Tian Zheng"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
@@ -25,6 +27,9 @@ From the packages' descriptions:
 + `DT` provides an R interface to the JavaScript library DataTables.
 
 ```{r load libraries, warning=FALSE, message=FALSE}
+#install.packages("tm")
+#install.packages("data.table")
+install.packages("DT")
 library(tm)
 library(data.table)
 library(tidytext)
@@ -36,7 +41,8 @@ library(DT)
 
 ```{r}
 # load lyrics data
-load('../data/lyrics.RData') 
+load('../data/lyrics.RData')
+head(dt_lyrics)
 ```
 
 
@@ -52,16 +58,29 @@ data("stop_words")
 word <- c("lot", "today", "months", "month", "wanna", "wouldnt", "wasnt", "ha", "na", "ooh", "da",
         "gonna", "im", "dont", "aint", "wont", "yeah", "la", "oi", "nigga", "fuck",
           "hey", "year", "years", "last", "past", "feel")
+
 stop_words <- c(stop_words$word, word)
 # clean the data and make a corpus
-corpus <- VCorpus(VectorSource(dt_lyrics$lyrics))%>%
-  tm_map(content_transformer(tolower))%>%
-  tm_map(removePunctuation)%>%
-  tm_map(removeWords, character(0))%>%
-  tm_map(removeWords, stop_words)%>%
-  tm_map(removeNumbers)%>%
-  tm_map(stripWhitespace)%>%
-  tm_map(leadingWhitespace)
+
+lyr <-  VCorpus(VectorSource(dt_lyrics$lyrics))
+lower <- tm_map(lyr, content_transformer(tolower))
+punc <- tm_map(lower, removePunctuation)
+rmwords <- tm_map(punc, removeWords, character(0))
+stop <- tm_map(rmwords, removeWords, stop_words)
+num <- tm_map(stop, removeNumbers)
+white <- tm_map(num, stripWhitespace)
+corpus <- tm_map(white, leadingWhitespace)
+
+
+
+#corpus <- VCorpus(VectorSource(dt_lyrics$lyrics))%>%
+ # tm_map(content_transformer(tolower))%>%
+#  tm_map(removePunctuation)%>%
+ # tm_map(removeWords, character(0))%>%
+#  tm_map(removeWords, stop_words)%>%
+ # tm_map(removeNumbers)%>%
+#  tm_map(stripWhitespace)%>%
+ # tm_map(leadingWhitespace)
 ```
 
 
